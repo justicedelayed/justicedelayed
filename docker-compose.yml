@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  main:
+    volumes:
+      - ./:/code
+    build:
+      context: .
+      dockerfile: Dockerfile
+    #command: ["python", "-u", "navigator.py"]
