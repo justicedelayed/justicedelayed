@@ -52,8 +52,9 @@ def create_district_table(connection):
 # Function to create the HTML storage table
 def create_html_table(connection):
     create_table_sql = """
-    CREATE TABLE IF NOT EXISTS CourtPages (
+    CREATE TABLE IF NOT EXISTS CourtPages2 (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_scraped TEXT NOT NULL,
         state_code TEXT NOT NULL,
         district_code TEXT NOT NULL,
         court_name TEXT NOT NULL,
@@ -65,24 +66,61 @@ def create_html_table(connection):
         cursor = connection.cursor()
         cursor.execute(create_table_sql)
         connection.commit()
-        print("Table 'CourtPages' created successfully.")
+        print("Table 'CourtPages 2' created successfully.")
+    except Error as e:
+        print(f"Error creating table: {e}")
+
+
+# Function to create the HTML storage table
+def create_cnr_table(connection):
+    create_table_sql = """
+    CREATE TABLE IF NOT EXISTS CNR (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_processed TEXT NOT NULL,
+        state_code TEXT NOT NULL,
+        district_code TEXT NOT NULL,
+        court_name TEXT NOT NULL,
+        establishment_name TEXT NOT NULL,
+        case_type_number_year TEXT NOT NULL,
+        petitioner_responder TEXT NOT NULL, 
+        cnr_number TEXT NOT NULL
+    )
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute(create_table_sql)
+        connection.commit()
+        print("Table 'CNR' created successfully.")
     except Error as e:
         print(f"Error creating table: {e}")
 
 
 # Function to save to the HTML storage table
 def save_html_to_db(
-    connection, state_code, district_code, court_name, establishment_name, html_content
+    connection,
+    date_scraped,
+    state_code,
+    district_code,
+    court_name,
+    establishment_name,
+    html_content,
 ):
     insert_sql = """
-    INSERT INTO CourtPages (state_code, district_code, court_name, establishment_name, html_content)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO CourtPages2 (date_scraped, state_code, district_code, court_name, establishment_name, html_content)
+    VALUES (?, ?, ?, ?, ?, ?)
     """
     try:
         cursor = connection.cursor()
         cursor.execute(
             insert_sql,
-            (state_code, district_code, court_name, establishment_name, html_content),
+            (
+                date_scraped,
+                state_code,
+                district_code,
+                court_name,
+                establishment_name,
+                html_content,
+            ),
         )
         connection.commit()
         print(f"HTML content saved successfully.")

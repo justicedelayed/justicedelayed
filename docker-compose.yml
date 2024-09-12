@@ -7,4 +7,5 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: ["python", "-u", "/code/process_html.py"]
     #command: ["python", "-u", "navigator.py"]

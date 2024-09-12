@@ -29,6 +29,7 @@ from db2 import (
     drop_table,
 )
 import os
+import datetime as dt
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +50,7 @@ class CourtNavigator:
         self.complex_options = None
         self.complex_2_options = None
         self.connection = None
+        self.date = dt.datetime.now().strftime("%Y-%m-%d %H:%M %p")
 
     async def setup(self):
         logging.info("Starting Playwright and launching browser.")
@@ -224,6 +226,8 @@ class CourtNavigator:
                 await self.page.locator("#validateError button").click()
 
             logging.info("Captcha entered.")
+
+            # TO-DO - Add a check for the captcha error message
 
             await asyncio.sleep(5)  # Increased wait time after filling captcha
 
@@ -433,6 +437,9 @@ class CourtNavigator:
             await self.page.locator("#sess_state_code").select_option(state_code)
             await asyncio.sleep(5)
             district_names, district_codes = await self.navigate_district(state_code)
+            await self.page.locator("#sess_state_code").select_option(state_code)
+            await asyncio.sleep(5)
+            court_names, court_codes = await self.get_court_complexes()
             insert_sql = await self.create_district_query(
                 state_code, district_names, district_codes
             )
@@ -530,6 +537,7 @@ class CourtNavigator:
                                 )
                                 # Save the HTML content to the database
                                 save_html_to_db(
+                                    self.date,
                                     self.connection,
                                     state_code,
                                     district_code,
@@ -537,6 +545,7 @@ class CourtNavigator:
                                     court_est_name,
                                     "Error Code: 001 : No IPC related codes found.",
                                 )
+                                # self.connection.commit()
                                 continue
                             else:
                                 logging.info(f"Completed processing for {court_name}.")
@@ -551,6 +560,7 @@ class CourtNavigator:
 
                                 # Save the HTML content to the database
                                 save_html_to_db(
+                                    self.date,
                                     self.connection,
                                     state_code,
                                     district_code,
@@ -558,6 +568,7 @@ class CourtNavigator:
                                     court_est_name,
                                     full_page_content,
                                 )
+                                # self.connection.commit()
 
                 else:
                     logging.error("No Court Establishment found.")
@@ -578,6 +589,7 @@ class CourtNavigator:
                         )
                         # Save the HTML content to the database
                         save_html_to_db(
+                            self.date,
                             self.connection,
                             state_code,
                             district_code,
@@ -585,12 +597,9 @@ class CourtNavigator:
                             "E003: No court establishment found",
                             "E001: No IPC related codes found.",
                         )
+                        # self.connection.commit()
                         continue
                     else:
-                        logging.info(f"Completed processing for {court_name}.")
-                        # "Page content:", page_content)
-                        # break  # Exit after processing one court complex
-
                         # Adding the district name as a div at the end of the page content
                         full_page_content = (
                             page_content
@@ -599,6 +608,7 @@ class CourtNavigator:
 
                         # Save the HTML content to the database
                         save_html_to_db(
+                            self.date,
                             self.connection,
                             state_code,
                             district_code,
@@ -606,6 +616,8 @@ class CourtNavigator:
                             "E003: No court establishment found",
                             full_page_content,
                         )
+                        # self.connection.commit()
+                        logging.info(f"Completed processing for {court_name}.")
 
                 # return False
 
@@ -708,14 +720,16 @@ async def main():
                 # State - Karnataka - 3, District - Chamrajnagar - 27
                 # State - Assam - 6, District - Hojai - 30
                 # State - Punjab - 22, District - Amritsar - 8
-                # await navigator.get_court_complexes_2("22", "8")
-                await navigator.get_court_complexes_2(state_code, district_code)
+                await navigator.get_court_complexes_2("22", "8")
+                # await navigator.get_court_complexes_2(state_code, district_code)
                 print("Processing next row.")
                 # break
         else:
             logging.error("No rows found.")
 
     except Exception as e:
+        connect.commit()
+        connect.close()
         logging.error(f"An error occurred: {e}")
     finally:
         connect.commit()
