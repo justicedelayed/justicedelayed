@@ -128,6 +128,122 @@ def save_html_to_db(
         print(f"Error saving HTML content to database: {e}")
 
 
+# Function to create the HTML storage table
+def create_court_table(connection):
+    create_table_sql = """
+    CREATE TABLE IF NOT EXISTS Courts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_scraped TEXT NOT NULL,
+        state_code TEXT NOT NULL,
+        district_code TEXT NOT NULL,
+        court_code TEXT NOT NULL,
+        court_name TEXT NOT NULL,
+        establishment_code TEXT,
+        establishment_name TEXT
+    )
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute(create_table_sql)
+        connection.commit()
+        print("Table 'Courts' created successfully.")
+    except Error as e:
+        print(f"Error creating table: {e}")
+
+
+# Function to create the HTML storage table
+def create_act_table(connection):
+    create_table_sql = """
+    CREATE TABLE IF NOT EXISTS Acts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_scraped TEXT NOT NULL,
+        state_code TEXT NOT NULL,
+        district_code TEXT NOT NULL,
+        court_code TEXT NOT NULL,
+        establishment_code TEXT,
+        act_code TEXT NOT NULL,
+        act_name TEXT NOT NULL
+    )
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute(create_table_sql)
+        connection.commit()
+        print("Table 'Acts' created successfully.")
+    except Error as e:
+        print(f"Error creating table: {e}")
+
+
+# Function to save to the HTML storage table
+def save_codes_to_db(
+    connection,
+    date_scraped,
+    state_code,
+    district_code,
+    court_code,
+    court_name,
+    establishment_code,
+    establishment_name,
+):
+    insert_sql = """
+    INSERT INTO Courts (date_scraped, state_code, district_code, court_code, court_name, establishment_code, establishment_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            insert_sql,
+            (
+                date_scraped,
+                state_code,
+                district_code,
+                court_code,
+                court_name,
+                establishment_code,
+                establishment_name,
+            ),
+        )
+        connection.commit()
+        print(f"Court details saved successfully.")
+    except Error as e:
+        print(f"Error saving Court details to database: {e}")
+
+
+# Function to save to the HTML storage table
+def save_acts_to_db(
+    connection,
+    date_scraped,
+    state_code,
+    district_code,
+    court_code,
+    establishment_code,
+    act_code,
+    act_name,
+):
+    insert_sql = """
+    INSERT INTO Acts (date_scraped, state_code, district_code, court_code, establishment_code, act_code, act_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            insert_sql,
+            (
+                date_scraped,
+                state_code,
+                district_code,
+                court_code,
+                establishment_code,
+                act_code,
+                act_name,
+            ),
+        )
+        connection.commit()
+        print(f"Act details saved successfully.")
+    except Error as e:
+        print(f"Error saving Court details to database: {e}")
+
+
 # Function to insert data into the table
 def insert_data(connection, insert_sql):
     # insert_sql = "INSERT INTO States (state_name, state_code) VALUES (?, ?)"
@@ -156,7 +272,20 @@ def query_table(connection):
 
 # Function to fetch the first 2 rows from the Districts table
 def fetch_first_two_rows(connection):
-    query_sql = "SELECT * FROM Districts LIMIT 27"
+    query_sql = "SELECT * FROM Districts LIMIT -1 OFFSET 165"
+    try:
+        cursor = connection.cursor()
+        cursor.execute(query_sql)
+        rows = cursor.fetchall()
+        return rows
+    except Error as e:
+        print(f"Error fetching rows: {e}")
+        return None
+
+
+# Function to fetch the first 2 rows from the Districts table
+def fetch_court_rows(connection):
+    query_sql = "SELECT * FROM Courts LIMIT 15"
     try:
         cursor = connection.cursor()
         cursor.execute(query_sql)

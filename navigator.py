@@ -23,13 +23,16 @@ from db2 import (
     query_table,
     custom_query,
     create_district_table,
+    create_court_table,
     save_html_to_db,
+    save_codes_to_db,
     create_html_table,
     fetch_first_two_rows,
     drop_table,
 )
 import os
 import datetime as dt
+from tenacity import retry, stop_after_attempt, wait_fixed, wait_exponential
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +40,8 @@ logging.basicConfig(
     level=logging.INFO,  # Log all INFO level and above
     format="%(asctime)s - %(levelname)s - %(message)s",  # Include timestamp
 )
+
+# TO-DO: Add section number as a parameter
 
 
 class CourtNavigator:
@@ -52,6 +57,15 @@ class CourtNavigator:
         self.connection = None
         self.date = dt.datetime.now().strftime("%Y-%m-%d %H:%M %p")
 
+    async def load_page(self):
+        await self.page.goto(self.url)
+        if await self.page.locator("#validateError button").is_visible():
+            await self.page.locator("#validateError button").click()
+        logging.info("Page loaded successfully.")
+
+    @retry(
+        stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
     async def setup(self):
         logging.info("Starting Playwright and launching browser.")
         self.playwright = await async_playwright().start()
@@ -189,7 +203,7 @@ class CourtNavigator:
             logging.info(f"All IPC-related codes: {ipc_related_options}")
             return ipc_related_options
 
-    async def process_act_codes(self):
+    async def process_act_codes(self, section_number="302"):
         logging.info("Processing act codes.")
         ipc_related_codes = await self.extract_ipc_related_codes()
 
@@ -453,9 +467,83 @@ class CourtNavigator:
 
             await asyncio.sleep(5)
 
-    async def get_court_complexes_2(self, state_code, district_code):
+    async def get_court_complexes_3(self, state_code, district_code):
         await self.setup()
         await self.setup_options()
+        # Wait for the state dropdown to be visible
+        await self.page.wait_for_selector("#sess_state_code", state="visible")
+        await self.page.locator("#sess_state_code").select_option(state_code)
+        # Wait for the district dropdown to be visible
+        try:
+            await self.page.wait_for_selector("#sess_dist_code", state="visible")
+            await self.page.locator("#sess_dist_code").select_option(district_code)
+        except Exception as e:
+            await self.setup()
+            await self.setup_options()
+            # Wait for the state dropdown to be visible
+            await self.page.wait_for_selector("#sess_state_code", state="visible")
+            await self.page.locator("#sess_state_code").select_option(state_code)
+            await self.page.wait_for_selector("#sess_dist_code", state="visible")
+            await self.page.locator("#sess_dist_code").select_option(district_code)
+
+        await asyncio.sleep(5)
+
+        court_names, court_codes = await self.get_court_complexes()
+
+        if court_codes:
+            for idx, code in enumerate(court_codes):
+                court_name = court_names[idx]
+                logging.info(f"Selecting court complex with code: {code}.")
+                await self.page.locator("#court_complex_code").select_option(code)
+                await asyncio.sleep(5)  # Wait after selecting court complex
+
+                if await self.page.locator("#validateError button").is_visible():
+                    await self.page.locator("#validateError button").click()
+
+                logging.info(f"Processing court complex_2 {court_names[idx]}.")
+                if await self.page.locator("#court_est_code").is_visible():
+                    logging.info("Selector #court_est_code found. ")
+                    await self.page.wait_for_selector(
+                        "#court_est_code", state="visible"
+                    )
+                    await asyncio.sleep(5)  # Ensure content is fully loaded
+                    court_est_options = self.page.locator("#court_est_code option")
+                    court_est_count = await court_est_options.count()
+                    logging.info(f"Found {court_est_count} court_est options.")
+                    court_est_names = []
+                    court_est_codes = []
+                    for idx in range(court_est_count):
+                        court_est_option = court_est_options.nth(idx)
+                        court_est_text = await court_est_option.text_content()
+                        court_est_value = await court_est_option.get_attribute("value")
+                        save_codes_to_db(
+                            self.connection,
+                            self.date,
+                            state_code,
+                            district_code,
+                            code,
+                            court_name,
+                            court_est_value,
+                            court_est_text,
+                        )
+                        court_est_names.append(court_est_text)
+                        court_est_codes.append(court_est_value)
+                        logging.info(f"Added court_est: {court_est_text}.")
+                else:
+                    save_codes_to_db(
+                        self.connection,
+                        self.date,
+                        state_code,
+                        district_code,
+                        code,
+                        court_name,
+                        "E003: No court establishment found",
+                        "E003: No court establishment found",
+                    )
+
+    async def get_court_complexes_2(self, state_code, district_code):
+        # await self.setup()
+        # await self.setup_options()
         # Wait for the state dropdown to be visible
         await self.page.wait_for_selector("#sess_state_code", state="visible")
         await self.page.locator("#sess_state_code").select_option(state_code)
@@ -537,8 +625,8 @@ class CourtNavigator:
                                 )
                                 # Save the HTML content to the database
                                 save_html_to_db(
-                                    self.date,
                                     self.connection,
+                                    self.date,
                                     state_code,
                                     district_code,
                                     court_name,
@@ -651,7 +739,6 @@ class CourtNavigator:
         # Process each state and break after the first successful processing
         # Wait for the state dropdown to be visible
         await self.page.wait_for_selector("#sess_state_code", state="visible")
-
         # Locate state options and count them
         logging.info(f"Processing state {state_name}.")
         state_option = self.state_options.nth(state_value)
@@ -691,6 +778,88 @@ class CourtNavigator:
         # return self.connection
         return self.connection
 
+    async def get_act_codes(
+    connection=None,
+    state_code="28",
+    district_code="1",
+    court_complex_code="1280004",
+    est_code="",
+    act_code
+):
+
+    # Get today's date
+    date_scraped = datetime.date.today()
+    logging.basicConfig(level=logging.INFO)
+
+    # Define the URL
+    url = "https://services.ecourts.gov.in/ecourtindia_v6/?p=casestatus/fillActType"
+
+    # Define the headers
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    }
+
+    # Define the data (parameters)
+    data = {
+        "state_code": state_code,
+        "dist_code": district_code,
+        "court_complex_code": court_complex_code,
+        "est_code": est_code,
+        "search_act": "",
+        "ajax_req": "true",
+        "app_token": "",
+    }
+
+    # Send the POST request
+    response = requests.post(url, headers=headers, data=data)
+
+    # Print the response
+    print("Status Code:", response.status_code)
+    print("Response Text:", response.text)
+
+    if response.status_code == 200:
+        print("Request Successful")
+
+        response_text = response.text
+
+        # Parse the JSON response
+        response_data = json.loads(response_text)
+
+        # Extract the act_list HTML
+        act_list_html = response_data.get("act_list", "")
+
+        # Use BeautifulSoup to parse the HTML options
+        soup = BeautifulSoup(act_list_html, "html.parser")
+
+        # Initialize an empty dictionary for storing the ACT codes and their corresponding details
+        filtered_act_dict = {}
+
+        # Compile your regex for filtering act names
+        ipc_regex = re.compile(r"^(I.P.C|IPC|Indian Penal Code)\b.*$", re.IGNORECASE)
+
+        options = soup.find_all("option")
+        print("Number of Options:", len(options))
+
+        # Loop through each <option> tag and extract the value and text
+        for index, option in enumerate(soup.find_all("option")):
+            act_code = option.get("value")
+            act_name = option.text.strip()
+
+            # Apply regex filtering
+            if act_code and act_name and act_code != "" and ipc_regex.search(act_name):
+                logging.info(f"REGEX MATCHED: {act_name}")
+                save_acts_to_db(
+                    connection,
+                    date_scraped,
+                    state_code,
+                    district_code,
+                    court_complex_code,
+                    est_code,
+                    act_code,
+                    act_name,
+                )
+
+
 
 async def main():
     print("----------------Starting main function----------------")
@@ -698,8 +867,8 @@ async def main():
     navigator = CourtNavigator(url)
 
     try:
-        await navigator.setup()
-        await navigator.setup_options()
+        # await navigator.setup()
+        # await navigator.setup_options()
         connect = await navigator.setup_db()
         navigator.connection = connect
         # await navigator.navigate_state()
@@ -709,8 +878,9 @@ async def main():
         # print("District table created.")
         # await navigator.process_states_3()
         # drop_table(navigator.connection, "CourtPages")
-        create_html_table(navigator.connection)
-        print("HTML table created.")
+        # create_html_table(navigator.connection)
+        create_court_table(navigator.connection)
+        print("Courts table created.")
         rows = fetch_first_two_rows(navigator.connection)
         if rows:
             for row in rows:
@@ -720,16 +890,17 @@ async def main():
                 # State - Karnataka - 3, District - Chamrajnagar - 27
                 # State - Assam - 6, District - Hojai - 30
                 # State - Punjab - 22, District - Amritsar - 8
-                await navigator.get_court_complexes_2("22", "8")
-                # await navigator.get_court_complexes_2(state_code, district_code)
+                # await navigator.get_court_complexes_2("22", "8")
+                await navigator.get_court_complexes_3(state_code, district_code)
+                await navigator.browser.close()
                 print("Processing next row.")
                 # break
         else:
             logging.error("No rows found.")
 
     except Exception as e:
-        connect.commit()
-        connect.close()
+        # connect.commit()
+        # connect.close()
         logging.error(f"An error occurred: {e}")
     finally:
         connect.commit()
