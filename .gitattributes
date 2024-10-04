@@ -1,3 +1,2 @@
 *.db filter=lfs diff=lfs merge=lfs -text
 jd-master-db.db filter=lfs diff=lfs merge=lfs -text
-*.db.0 filter=lfs diff=lfs merge=lfs -text
