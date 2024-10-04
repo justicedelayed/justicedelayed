@@ -380,7 +380,7 @@ def main():
     # # Step 4: Query data from the table
     # query_table(connection)
 
-    add_column(connection, "COURTS_HTML", "section_number", "TEXT", "302")
+    # add_column(connection, "COURTS_HTML", "section_number", "TEXT", "302")
 
     # Close the connection
     if connection:
