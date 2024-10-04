@@ -453,7 +453,7 @@ class CourtNavigator:
             district_names, district_codes = await self.navigate_district(state_code)
             await self.page.locator("#sess_state_code").select_option(state_code)
             await asyncio.sleep(5)
-            court_names, court_codes = await self.get_court_complexes()
+            # court_names, court_codes = await self.get_court_complexes()
             insert_sql = await self.create_district_query(
                 state_code, district_names, district_codes
             )
@@ -779,86 +779,91 @@ class CourtNavigator:
         return self.connection
 
     async def get_act_codes(
-    connection=None,
-    state_code="28",
-    district_code="1",
-    court_complex_code="1280004",
-    est_code="",
-    act_code
-):
+        connection=None,
+        state_code="28",
+        district_code="1",
+        court_complex_code="1280004",
+        est_code="",
+    ):
 
-    # Get today's date
-    date_scraped = datetime.date.today()
-    logging.basicConfig(level=logging.INFO)
+        # Get today's date
+        date_scraped = datetime.date.today()
+        logging.basicConfig(level=logging.INFO)
 
-    # Define the URL
-    url = "https://services.ecourts.gov.in/ecourtindia_v6/?p=casestatus/fillActType"
+        # Define the URL
+        url = "https://services.ecourts.gov.in/ecourtindia_v6/?p=casestatus/fillActType"
 
-    # Define the headers
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-    }
+        # Define the headers
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        }
 
-    # Define the data (parameters)
-    data = {
-        "state_code": state_code,
-        "dist_code": district_code,
-        "court_complex_code": court_complex_code,
-        "est_code": est_code,
-        "search_act": "",
-        "ajax_req": "true",
-        "app_token": "",
-    }
+        # Define the data (parameters)
+        data = {
+            "state_code": state_code,
+            "dist_code": district_code,
+            "court_complex_code": court_complex_code,
+            "est_code": est_code,
+            "search_act": "",
+            "ajax_req": "true",
+            "app_token": "",
+        }
 
-    # Send the POST request
-    response = requests.post(url, headers=headers, data=data)
+        # Send the POST request
+        response = requests.post(url, headers=headers, data=data)
 
-    # Print the response
-    print("Status Code:", response.status_code)
-    print("Response Text:", response.text)
+        # Print the response
+        print("Status Code:", response.status_code)
+        print("Response Text:", response.text)
 
-    if response.status_code == 200:
-        print("Request Successful")
+        if response.status_code == 200:
+            print("Request Successful")
 
-        response_text = response.text
+            response_text = response.text
 
-        # Parse the JSON response
-        response_data = json.loads(response_text)
+            # Parse the JSON response
+            response_data = json.loads(response_text)
 
-        # Extract the act_list HTML
-        act_list_html = response_data.get("act_list", "")
+            # Extract the act_list HTML
+            act_list_html = response_data.get("act_list", "")
 
-        # Use BeautifulSoup to parse the HTML options
-        soup = BeautifulSoup(act_list_html, "html.parser")
+            # Use BeautifulSoup to parse the HTML options
+            soup = BeautifulSoup(act_list_html, "html.parser")
 
-        # Initialize an empty dictionary for storing the ACT codes and their corresponding details
-        filtered_act_dict = {}
+            # Initialize an empty dictionary for storing the ACT codes and their corresponding details
+            filtered_act_dict = {}
 
-        # Compile your regex for filtering act names
-        ipc_regex = re.compile(r"^(I.P.C|IPC|Indian Penal Code)\b.*$", re.IGNORECASE)
+            # Compile your regex for filtering act names
+            ipc_regex = re.compile(
+                r"^(I.P.C|IPC|Indian Penal Code)\b.*$", re.IGNORECASE
+            )
 
-        options = soup.find_all("option")
-        print("Number of Options:", len(options))
+            options = soup.find_all("option")
+            print("Number of Options:", len(options))
 
-        # Loop through each <option> tag and extract the value and text
-        for index, option in enumerate(soup.find_all("option")):
-            act_code = option.get("value")
-            act_name = option.text.strip()
+            # Loop through each <option> tag and extract the value and text
+            for index, option in enumerate(soup.find_all("option")):
+                act_code = option.get("value")
+                act_name = option.text.strip()
 
-            # Apply regex filtering
-            if act_code and act_name and act_code != "" and ipc_regex.search(act_name):
-                logging.info(f"REGEX MATCHED: {act_name}")
-                save_acts_to_db(
-                    connection,
-                    date_scraped,
-                    state_code,
-                    district_code,
-                    court_complex_code,
-                    est_code,
-                    act_code,
-                    act_name,
-                )
-
+                # Apply regex filtering
+                if (
+                    act_code
+                    and act_name
+                    and act_code != ""
+                    and ipc_regex.search(act_name)
+                ):
+                    logging.info(f"REGEX MATCHED: {act_name}")
+                    save_acts_to_db(
+                        connection,
+                        date_scraped,
+                        state_code,
+                        district_code,
+                        court_complex_code,
+                        est_code,
+                        act_code,
+                        act_name,
+                    )
 
 
 async def main():

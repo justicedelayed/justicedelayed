@@ -13,7 +13,12 @@ from db2 import (
 import datetime
 import os
 
-# Enable logging
+# Configure logging
+logging.basicConfig(
+    filename="court_navigator.log",  # Log to this file
+    level=logging.INFO,  # Log all INFO level and above
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Include timestamp
+)
 
 
 def get_act_codes(
@@ -51,8 +56,8 @@ def get_act_codes(
     response = requests.post(url, headers=headers, data=data)
 
     # Print the response
-    print("Status Code:", response.status_code)
-    print("Response Text:", response.text)
+    # print("Status Code:", response.status_code)
+    # print("Response Text:", response.text)
 
     if response.status_code == 200:
         print("Request Successful")
@@ -60,41 +65,58 @@ def get_act_codes(
         response_text = response.text
 
         # Parse the JSON response
-        response_data = json.loads(response_text)
 
-        # Extract the act_list HTML
-        act_list_html = response_data.get("act_list", "")
+        if not response_text:
+            logging.error("Response text is None.")
+            save_acts_to_db(
+                connection,
+                date_scraped,
+                state_code,
+                district_code,
+                court_complex_code,
+                est_code,
+                "E005: No Act Codes list found",
+                "E005: No Act Codes list found",
+            )
+        else:
+            response_data = json.loads(response_text)
 
-        # Use BeautifulSoup to parse the HTML options
-        soup = BeautifulSoup(act_list_html, "html.parser")
+            # Extract the act_list HTML
+            act_list_html = response_data.get("act_list", "")
 
-        # Initialize an empty dictionary for storing the ACT codes and their corresponding details
-        filtered_act_dict = {}
+            # Use BeautifulSoup to parse the HTML options
+            soup = BeautifulSoup(act_list_html, "html.parser")
 
-        # Compile your regex for filtering act names
-        ipc_regex = re.compile(r"^(I.P.C|IPC|Indian Penal Code)\b.*$", re.IGNORECASE)
+            # Initialize an empty dictionary for storing the ACT codes and their corresponding details
+            filtered_act_dict = {}
 
-        options = soup.find_all("option")
-        print("Number of Options:", len(options))
+            # Compile your regex for filtering act names
+            ipc_regex = re.compile(
+                r"^(I.P.C|IPC|Indian Penal Code)\b.*$", re.IGNORECASE
+            )
 
-        # Loop through each <option> tag and extract the value and text
-        for index, option in enumerate(soup.find_all("option")):
-            act_code = option.get("value")
-            act_name = option.text.strip()
+            options = soup.find_all("option")
+            # print("Number of Options:", len(options))
 
-            # Apply regex filtering
-            if act_code and act_name and act_code != "" and ipc_regex.search(act_name):
-                logging.info(f"REGEX MATCHED: {act_name}")
-                save_acts_to_db(
-                    connection,
-                    date_scraped,
-                    state_code,
-                    district_code,
-                    court_complex_code,
-                    est_code,
-                    act_code,
-                    act_name,
-                )
+            # Loop through each <option> tag and extract the value and text
+            for index, option in enumerate(soup.find_all("option")):
+                act_code = option.get("value")
+                act_name = option.text.strip()
+
+                # Apply regex filtering
+                if act_code and act_name and act_code != "":
+                    if ipc_regex.search(act_name):
+                        logging.info(f"REGEX MATCHED: {act_name}")
+                        save_acts_to_db(
+                            connection,
+                            date_scraped,
+                            state_code,
+                            district_code,
+                            court_complex_code,
+                            est_code,
+                            act_code,
+                            act_name,
+                        )
 
 
 def setup_db():
@@ -116,24 +138,23 @@ def setup_db():
 
 def main():
     connection = setup_db()
-    drop_table(connection, "Acts")
+    # drop_table(connection, "Acts")
     create_act_table(connection)
     logging.info("ACT Table created.")
     rows = fetch_court_rows(connection)
     if rows:
         for row in rows:
-            print("row is: ", type(row))
             state_code = row[2]
             district_code = row[3]
             court_code = row[4]
             court_name = row[5]
             est_code = row[6]
             est_name = row[7]
-            print(court_code)
             court_code = court_code.split("@")[0]
-            print(court_code)
             if est_code == "E003: No court establishment found":
                 est_code = ""
+            if est_name == "Select court establishment":
+                continue  # skipping Select court establishment
             print(
                 f"State Code: {state_code}, District Name: {district_code}, Court Code: {court_code}, Establishment Code: {est_code}"
             )

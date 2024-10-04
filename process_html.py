@@ -28,15 +28,12 @@ def setup_db():
 
 
 def main():
-
     # Initialize an empty list to store CNR numbers
     date_processed = dt.datetime.now().strftime("%Y-%m-%d %H:%M %p")
     all_CNR_HTMLS = [["Case_Type_Number_Year", "Petitioner_Responder", "CNR_Number"]]
-    # print("all_CNR_HTMLS: ", all_CNR_HTMLS)
     connection = None
     try:
         connection = setup_db()
-        # print("Connection is")
     except Exception as e:
         logging.info(f"Error setting up database: {e}")
 
@@ -45,77 +42,85 @@ def main():
 
     # Fetch the HTML content from the database
     if connection:
-        court_pages = fetch_court_pages(connection)
-
-        if court_pages:
-            for page in court_pages[7:8]:
-                (
-                    id,
-                    state_code,
-                    district_code,
-                    court_name,
-                    establishment_name,
-                    html_content,
-                ) = page
+        rows = fetch_court_pages(connection)
+        if rows:
+            for row in rows:
+                date_scraped = row[1]
+                state_code = row[2]
+                district_code = row[3]
+                court_code = row[4]
+                est_code = row[5]
+                act_code = row[6]
+                case_status = row[7]
+                html_content = row[8]
+                section_number = row[9]
                 html_content_with_triple_quotes = f'"""{html_content}"""'
-                print("Processing court page:", court_name)
-                print("Establishment Name:", establishment_name)
-                print("State Code:", state_code)
-                print("District Code:", district_code)
-                # print("HTML: ", (html_content_with_triple_quotes[:500]))
+                print(
+                    f"State Code: {state_code}, District Name: {district_code}, Court Code: {court_code}, Establishment Code: {est_code}, Act Code: {act_code}, Section Number: {section_number}"
+                )
                 all_CNR = parse_html_files(html_content_with_triple_quotes)
                 print("All CNR: ", all_CNR)
                 # Iterate over each list in all_CNR_HTMLS
-                for cnr_list in all_CNR:
-                    print("CNR List: ", cnr_list)
-                    # Extract the values from the list
-                    case_type_number_year = cnr_list[0]
-                    petitioner_responder = cnr_list[1]
-                    cnr_number = cnr_list[2]
-
-                    # Insert the values into the database table
+                if all_CNR == []:
+                    # Insert the values with error code into the database table
                     cursor = connection.cursor()
                     cursor.execute(
                         """
-                        INSERT INTO CNR (date_processed, state_code, district_code, court_name, establishment_name, case_type_number_year, petitioner_responder, cnr_number)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO CNR (date_processed, date_scraped, state_code, district_code, court_code, est_code, act_code, section_number, case_status, case_type_number_year, petitioner_responder, cnr_number)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             date_processed,
+                            date_scraped,
                             state_code,
                             district_code,
-                            court_name,
-                            establishment_name,
-                            case_type_number_year,
-                            petitioner_responder,
-                            cnr_number,
+                            court_code,
+                            est_code,
+                            act_code,
+                            section_number,
+                            case_status,
+                            "E007: No CNR numbers found as No Records Found",
+                            "E007: No CNR numbers found as No Records Found",
+                            "E007: No CNR numbers found as No Records Found",
                         ),
                     )
                     connection.commit()
                     cursor.close()
+                else:
+                    for cnr_list in all_CNR:
+                        print("CNR List: ", cnr_list)
+                        # Extract the values from the list
+                        case_type_number_year = cnr_list[0]
+                        petitioner_responder = cnr_list[1]
+                        cnr_number = cnr_list[2]
+
+                        # Insert the values into the database table
+                        cursor = connection.cursor()
+                        cursor.execute(
+                            """
+                            INSERT INTO CNR (date_processed, date_scraped, state_code, district_code, court_code, est_code, act_code, section_number, case_status, case_type_number_year, petitioner_responder, cnr_number)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                date_processed,
+                                date_scraped,
+                                state_code,
+                                district_code,
+                                court_code,
+                                est_code,
+                                act_code,
+                                section_number,
+                                case_status,
+                                case_type_number_year,
+                                petitioner_responder,
+                                cnr_number,
+                            ),
+                        )
+                        connection.commit()
+                        cursor.close()
                     all_CNR_HTMLS.append(cnr_list)
-                # print("First CNR: ", all_CNR[81])
-                # print("Length of CNR: ", len(all_CNR))
-                # print("All CNR: ", all_CNR)
-                # print("All CNR HTMLS", all_CNR_HTMLS)
-                # all_CNR_HTMLS.append(all_CNR)
-                # print("CNR Numbers: ", all_CNR_HTMLS)
-                # print("Length of CNR Numbers: ", len(all_CNR_HTMLS))
-                # print("First CNR Number: ", all_CNR_HTMLS[0])
 
-        # After processing all files, save the results to a CSV file (optional)
-        # output_df = pd.DataFrame(
-        #     all_CNR_HTMLS,
-        #     columns=["Case_Type_Number_Year", "Petitioner_Responder", "CNR_Number"],
-        # )
-
-        # print("Output DF: ", output_df.head())
-
-        # output_df.to_csv("CNR_numbers.csv", index=False)
-
-        print(
-            "Processing complete. CNR numbers extracted and saved to 'CNR_numbers.csv'."
-        )
+        print("Processing complete. CNR numbers extracted and saved to CNR Table.")
 
     else:
         logging.error("No connection to database.")
@@ -175,7 +180,6 @@ def parse_html_files(html_content):
                 # print("Columns: ", columns)
                 print("Length of columns: ", len(columns))
                 if len(columns) >= 3:
-                    # print("HERE IN ELEMENTS")
                     case_type_number_year = columns[1].text.strip()
                     petitioner_vs_respondent = (
                         columns[2]
@@ -225,26 +229,6 @@ def parse_html_files(html_content):
     print("Sending all CNR 2: ", all_CNR_2)
 
     return all_CNR_2
-
-
-# # Specify the directory containing the HTML files
-# # directory = "/Users/shalakashinde/Columbia/master_project/court_page_htmls"
-
-# # List all files in the directory
-# files = os.listdir(directory)
-
-# # Iterate over the HTML files
-# for file_name in files:
-#     # Construct the full file path
-#     file_path = os.path.join(directory, file_name)
-
-#     try:
-#         # Read the file content
-#         with open(file_path, "r", encoding="utf-8") as file:
-#             html_content = file.read()
-#     except Exception as e:
-#         print(f"Error reading file {file_name}: {e}")
-#         continue
 
 
 if __name__ == "__main__":
